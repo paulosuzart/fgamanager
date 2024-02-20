@@ -12,8 +12,16 @@ import (
 type TupleView struct {
 	tview.TableContentReadOnly
 	// just to avoid going to the database again
-	query *string
-	page  *db.LoadResult
+	page   *db.LoadResult
+	filter db.Filter
+}
+
+func NewTupleView() *TupleView {
+	return &TupleView{
+		TableContentReadOnly: tview.TableContentReadOnly{},
+		page:                 nil,
+		filter:               db.Filter{},
+	}
 }
 
 type Action string
@@ -34,7 +42,7 @@ func (a Action) String() string {
 }
 
 func (t *TupleView) GetRowCount() int {
-	return db.CountTuples(t.query) + 1
+	return db.CountTuples(&t.filter) + 1
 }
 
 func (t *TupleView) GetColumnCount() int {
@@ -43,7 +51,11 @@ func (t *TupleView) GetColumnCount() int {
 }
 
 func (t *TupleView) load(row int) {
-	t.page = db.Load(row, t.query)
+	t.page = db.Load(row, &t.filter)
+}
+
+func (t *TupleView) setFilter(filter db.Filter) {
+	t.filter = filter
 }
 
 func (t *TupleView) GetCell(row, column int) *tview.TableCell {
@@ -70,7 +82,7 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 		}
 	}
 
-	if t.page == nil || t.page.LowerBound > row || t.page.UpperBound < row || (t.query != nil && t.page.Query != *t.query) {
+	if t.page == nil || t.page.LowerBound > row || t.page.UpperBound < row || (t.filter.Search != t.page.Filter.Search) {
 		t.load(row - 1)
 		log.Printf("Current bounds: %v-%v. Requested row: %v", t.page.LowerBound, t.page.UpperBound, row)
 	}
@@ -163,27 +175,40 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	infoTable.SetCell(2, 5, totalCountView)
 	infoTable.SetCell(2, 7, selectedCountView)
 
-	tuples := &TupleView{}
+	tupleView := NewTupleView()
 
-	tupleTable := tview.NewTable().SetContent(tuples).SetSelectable(true, false).
+	tupleTable := tview.NewTable().SetContent(tupleView).SetSelectable(true, false).
 		SetBorders(false).SetFixed(1, 8)
 	tupleTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, _ := tupleTable.GetSelection()
 		if event.Key() == tcell.KeyCtrlD && row > 1 {
-			tuple := tuples.page.Res[row-tuples.page.LowerBound].Tuple
+			tuple := tupleView.page.Res[row-tupleView.page.LowerBound].Tuple
 			log.Printf("Marking row as deleted %v", tuple.TupleKey)
 			db.MarkDeletion(tuple.TupleKey)
-			tuples.load(tuples.page.LowerBound)
+			tupleView.load(tupleView.page.LowerBound)
 		}
 		return event
 	})
 
 	search := tview.NewInputField().
-		SetLabel("Filter: ").
+		SetLabel("Filter").
 		SetPlaceholder("%budget invoice:%").
 		SetFieldWidth(40)
 
 	userTypes := userTypesDropdown()
+
+	// on enter we set search filter
+	search.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			filter := db.Filter{}
+			searchText := search.GetText()
+			filter.Search = &searchText
+			if i, userType := userTypes.GetCurrentOption(); i > 1 {
+				filter.UserType = &userType
+			}
+			tupleView.setFilter(filter)
+		}
+	})
 
 	filterForm := tview.NewForm().
 		AddFormItem(userTypes).
@@ -193,26 +218,28 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 
 	filterForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// if we hit tab at the last item of the form we go to the table
-		if i, _ := filterForm.GetFocusedItemIndex(); i == filterForm.GetFormItemCount()-1 && event.Key() == tcell.KeyTab {
-			app.SetFocus(tupleTable)
+		if i, _ := filterForm.GetFocusedItemIndex(); i == filterForm.GetFormItemCount()-1 {
+			if event.Key() == tcell.KeyTab {
+				app.SetFocus(tupleTable)
+				return event
+			} else if event.Key() == tcell.KeyEnter {
+				filter := db.Filter{}
+				searchText := search.GetText()
+				filter.Search = &searchText
+				if i, userType := userTypes.GetCurrentOption(); i > 1 {
+					filter.UserType = &userType
+				}
+				tupleView.setFilter(filter)
+				app.SetFocus(tupleTable)
+				return nil
+			}
+
 		}
 		return event
 	})
 
 	// switch cursor between search and table
 	tupleTable.SetDoneFunc(func(key tcell.Key) { app.SetFocus(filterForm) })
-
-	// on enter we set search filter
-	search.SetDoneFunc(func(key tcell.Key) {
-		log.Printf("Done search %v", key)
-		if key == tcell.KeyEnter {
-			txt := search.GetText()
-			tuples.query = &txt
-			log.Printf("Adding search value %v", *tuples.query)
-		} //else if key == tcell.KeyTab || key == tcell.KeyBacktab {
-		//	app.SetFocus(tupleTable)
-		//}
-	})
 
 	grid := tview.NewGrid().
 		SetRows(3, -1).
@@ -234,7 +261,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 				writesView.SetText(fmt.Sprintf("%v", t.Writes))
 				deletesView.SetText(fmt.Sprintf("%v", t.Deletes))
 				watchView.SetText(fmt.Sprintf("%v", t.WatchEnabled))
-				totalCountView.SetText(fmt.Sprintf("%v", db.CountTuples(nil)))
+				totalCountView.SetText(fmt.Sprintf("%v", db.CountTuples(&db.Filter{})))
 				// we decrease one because first line is actually header
 				selectedCountView.SetText(fmt.Sprintf("%v", tupleTable.GetRowCount()-1))
 			})

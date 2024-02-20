@@ -65,13 +65,13 @@ func main() {
 	fgaClient = openfga.NewAPIClient(configuration)
 
 	if err != nil {
-		panic("Unable to create openfga config")
+		log.Panic("Unable to create openfga config")
 	}
 	app := tview.NewApplication()
 	root := AddComponents(context.Background(), app)
 
 	if err := app.SetRoot(root, true).SetFocus(root).Run(); err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 }

@@ -12,7 +12,7 @@ func read(ctx context.Context, watchUpdatesChan chan WatchUpdate) {
 	for {
 		var lastWatchUpdate *WatchUpdate
 		token := db.GetContinuationToken(fgaClient.GetConfig().ApiUrl, fgaClient.GetStoreId())
-		request := fgaClient.OpenFgaApi.ReadChanges(ctx).PageSize(100)
+		request := fgaClient.OpenFgaApi.ReadChanges(ctx).PageSize(50)
 		if token != nil {
 			request = request.ContinuationToken(*token)
 		}

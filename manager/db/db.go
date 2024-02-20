@@ -52,12 +52,8 @@ func SetupDb() {
 		    last_sync timestamp
 		)
 	`
-
-	_, err = db.Exec(sts)
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	db.MustExec(sts)
+	log.Printf("Finished db setup")
 
 }
 
@@ -120,6 +116,11 @@ type Connection struct {
 	LastSync          time.Time `db:"last_sync"`
 }
 
+type Filter struct {
+	Search   *string
+	UserType *string
+}
+
 func UpsertConnection(connection Connection) {
 	_, err := db.NamedExec(`
 			insert into connections (api_url, store_id, continuation_token, last_sync) 
@@ -167,27 +168,37 @@ type TuplePendingAction struct {
 	*PendingAction "db:pending_actions"
 }
 
+// LoadResult represents the last page load
 type LoadResult struct {
+	// the first item loaded row number
 	LowerBound int
+	// the last item loaded row number
 	UpperBound int
-	Res        []TuplePendingAction
-	Query      string
+	// the tuple content itself
+	Res []TuplePendingAction
+	// whatever was the filter user, it's returned
+	Filter *Filter
 }
 
-func Load(offset int, query *string) *LoadResult {
+func Load(offset int, filter *Filter) *LoadResult {
 	selectClause := `
 			select tuples.*, p.action from (select *, row_number() over (order by timestamp desc) as row_number from tuples) tuples
 			         left join pending_actions p on tuples.tuple_key = p.tuple_key 
 			where row_number >= :offset and row_number <= :offset + 200
 			`
 
-	if query != nil && len(strings.TrimSpace(*query)) > 3 {
+	if filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
 		selectClause = fmt.Sprintf("%s and tuples.tuple_key like :query", selectClause)
 	}
+	if filter.UserType != nil {
+		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType", selectClause)
+	}
+
 	log.Printf("Load Query: %v", selectClause)
 	rows, err := db.NamedQuery(selectClause, map[string]interface{}{
-		"offset": offset,
-		"query":  query,
+		"offset":   offset,
+		"query":    filter.Search,
+		"userType": filter.UserType,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -199,21 +210,19 @@ func Load(offset int, query *string) *LoadResult {
 		err = rows.StructScan(&p)
 		res = append(res, p)
 	}
+	err = rows.Close()
+	if err != nil {
+		return nil
+	}
 	if len(res) == 0 {
 		return nil
 	}
 
-	var finalQuery string
-	if query != nil {
-		finalQuery = *query
-	} else {
-		finalQuery = ""
-	}
 	return &LoadResult{
 		LowerBound: res[0].Row,
 		UpperBound: res[len(res)-1].Row,
 		Res:        res,
-		Query:      finalQuery,
+		Filter:     filter,
 	}
 }
 
@@ -228,16 +237,32 @@ func GetContinuationToken(apiUrl, storeId string) *string {
 	return &token
 }
 
-func CountTuples(query *string) int {
-	var count int
+func CountTuples(filter *Filter) int {
 	selectClause := "select count(*) as count from tuples"
-	if query != nil && len(strings.TrimSpace(*query)) > 3 {
-		selectClause = fmt.Sprintf("%s where tuples.tuple_key like ?\n", selectClause)
+	if filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
+		selectClause = fmt.Sprintf("%s where tuples.tuple_key like :query\n", selectClause)
 	}
-	log.Printf("Count query %v", selectClause)
-	err := db.Get(&count, selectClause, query)
+	if filter.UserType != nil {
+		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType\n", selectClause)
+	}
+	log.Printf("Count query '%v'", selectClause)
+
+	res, err := db.NamedQuery(selectClause, map[string]interface{}{
+		"query":    filter.Search,
+		"userType": filter.UserType,
+	})
 	if err != nil {
 		log.Fatal(err)
+		return 0
+	}
+	res.Next()
+	var count int
+	err = res.Scan(&count)
+	if err != nil {
+		return 0
+	}
+	err = res.Close()
+	if err != nil {
 		return 0
 	}
 	return count
@@ -264,6 +289,10 @@ func GetUserTypes() []string {
 		var userType string
 		result.Scan(&userType)
 		userTypes = append(userTypes, userType)
+	}
+	err = result.Close()
+	if err != nil {
+		return nil
 	}
 	return userTypes
 }
