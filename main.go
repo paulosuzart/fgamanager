@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	openfga "github.com/openfga/go-sdk"
+	"github.com/paulosuzart/fgamanager/db"
 	"github.com/rivo/tview"
 	"log"
-	"manager/db"
 	"os"
 )
 

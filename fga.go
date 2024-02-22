@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	openfga "github.com/openfga/go-sdk"
-	"manager/db"
+	"github.com/paulosuzart/fgamanager/db"
 	"time"
 )
 

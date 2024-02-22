@@ -1,4 +1,4 @@
-module manager
+module github.com/paulosuzart/fgamanager
 
 go 1.21.6
 

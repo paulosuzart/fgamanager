@@ -1,7 +1,7 @@
 test:
-	go test manager/...
+	go test ./...
 
 build:
-	go build -o bin/manager manager
+	go build -o bin/fgamanager .
 
 all: test build

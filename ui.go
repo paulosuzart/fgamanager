@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/gdamore/tcell/v2"
+	"github.com/paulosuzart/fgamanager/db"
 	"github.com/rivo/tview"
 	"log"
-	"manager/db"
 )
 
 type TupleView struct {
