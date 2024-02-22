@@ -24,3 +24,4 @@ go.work
 fga.db
 *.db
 *.db-journal
+bin
