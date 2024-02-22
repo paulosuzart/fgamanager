@@ -25,8 +25,8 @@ func Transact(f func()) error {
 	return nil
 }
 
-func SetupDb() {
-	_db, err := sqlx.Open("sqlite3", "fga.db")
+func setupDb(dataSource string) {
+	_db, err := sqlx.Open("sqlite3", dataSource)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -54,7 +54,9 @@ func SetupDb() {
 	`
 	db.MustExec(sts)
 	log.Printf("Finished db setup")
-
+}
+func SetupDb() {
+	setupDb("fga.db")
 }
 
 // ApplyChange Takes a tuple change straight from the API
@@ -186,20 +188,21 @@ func Load(offset int, filter *Filter) *LoadResult {
 			         left join pending_actions p on tuples.tuple_key = p.tuple_key 
 			where row_number >= :offset and row_number <= :offset + 200
 			`
-
-	if filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
-		selectClause = fmt.Sprintf("%s and tuples.tuple_key like :query", selectClause)
+	var params = map[string]interface{}{
+		"offset": offset,
 	}
-	if filter.UserType != nil {
+
+	if filter != nil && filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
+		selectClause = fmt.Sprintf("%s and tuples.tuple_key like :query", selectClause)
+		params["query"] = filter.Search
+	}
+	if filter != nil && filter.UserType != nil {
 		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType", selectClause)
+		params["userType"] = filter.UserType
 	}
 
 	log.Printf("Load Query: %v", selectClause)
-	rows, err := db.NamedQuery(selectClause, map[string]interface{}{
-		"offset":   offset,
-		"query":    filter.Search,
-		"userType": filter.UserType,
-	})
+	rows, err := db.NamedQuery(selectClause, params)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -239,18 +242,18 @@ func GetContinuationToken(apiUrl, storeId string) *string {
 
 func CountTuples(filter *Filter) int {
 	selectClause := "select count(*) as count from tuples"
-	if filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
+	var params = make(map[string]interface{})
+	if filter != nil && filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
 		selectClause = fmt.Sprintf("%s where tuples.tuple_key like :query\n", selectClause)
+		params["query"] = filter.Search
 	}
-	if filter.UserType != nil {
+	if filter != nil && filter.UserType != nil {
 		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType\n", selectClause)
+		params["userType"] = filter.UserType
 	}
 	log.Printf("Count query '%v'", selectClause)
 
-	res, err := db.NamedQuery(selectClause, map[string]interface{}{
-		"query":    filter.Search,
-		"userType": filter.UserType,
-	})
+	res, err := db.NamedQuery(selectClause, params)
 	if err != nil {
 		log.Fatal(err)
 		return 0
@@ -287,7 +290,10 @@ func GetUserTypes() []string {
 	var userTypes []string
 	for result.Next() {
 		var userType string
-		result.Scan(&userType)
+		err := result.Scan(&userType)
+		if err != nil {
+			log.Panic(err)
+		}
 		userTypes = append(userTypes, userType)
 	}
 	err = result.Close()
