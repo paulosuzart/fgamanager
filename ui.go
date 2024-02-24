@@ -175,6 +175,31 @@ func userTypesDropdown() *tview.DropDown {
 
 	return dropdown
 }
+
+func relationsDropdown() *tview.DropDown {
+	availableTypes := db.GetRelations()
+	options := []string{"Select a Relation"}
+	options = append(options, availableTypes...)
+	dropdown := tview.NewDropDown().
+		SetLabel("User Types").
+		SetOptions(options, nil).
+		SetCurrentOption(0)
+
+	return dropdown
+}
+
+func objectTypesDropdown() *tview.DropDown {
+	availableTypes := db.GetObjectTypes()
+	options := []string{"Select a Object Type"}
+	options = append(options, availableTypes...)
+	dropdown := tview.NewDropDown().
+		SetLabel("User Types").
+		SetOptions(options, nil).
+		SetCurrentOption(0)
+
+	return dropdown
+}
+
 func AddComponents(context context.Context, app *tview.Application) *tview.Grid {
 	infoTable := tview.NewTable().SetBorders(false)
 	infoTable.SetCell(0, 0, tview.NewTableCell("Watch Active:").
@@ -244,6 +269,8 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 		SetFieldWidth(40)
 
 	userTypes := userTypesDropdown()
+	relations := relationsDropdown()
+	objectTypes := objectTypesDropdown()
 
 	// on enter we set search filter
 	search.SetDoneFunc(func(key tcell.Key) {
@@ -254,12 +281,15 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 			if i, userType := userTypes.GetCurrentOption(); i > 1 {
 				filter.UserType = &userType
 			}
+			// TODO handle other filters
 			tupleView.setFilter(filter)
 		}
 	})
 
 	filterForm := tview.NewForm().
 		AddFormItem(userTypes).
+		AddFormItem(relations).
+		AddFormItem(objectTypes).
 		AddFormItem(search)
 
 	filterForm.SetHorizontal(true)
