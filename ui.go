@@ -7,20 +7,61 @@ import (
 	"github.com/paulosuzart/fgamanager/db"
 	"github.com/rivo/tview"
 	"log"
+	"sync"
+	"time"
 )
+
+type count struct {
+	totalCount   int
+	lock         sync.RWMutex
+	newCountChan chan int
+}
+
+func (c *count) getTotal() int {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.totalCount
+}
+
+func (c *count) setTotal(newTotal int) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.totalCount = newTotal
+	log.Printf("New count is %v", newTotal)
+}
+
+func (c *count) refresh(ctx context.Context, d time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Refresh routint is done")
+			return
+		default:
+			log.Printf("Refresh")
+			dbCount := db.CountTuples(nil)
+			c.setTotal(dbCount)
+			c.newCountChan <- dbCount
+			time.Sleep(d)
+		}
+	}
+}
 
 type TupleView struct {
 	tview.TableContentReadOnly
 	// just to avoid going to the database again
-	page   *db.LoadResult
-	filter db.Filter
+	page      *db.LoadResult
+	filter    db.Filter
+	filterSet bool
+	count     *count
 }
 
-func NewTupleView() *TupleView {
+func newTupleView(newCount *count) *TupleView {
+
 	return &TupleView{
 		TableContentReadOnly: tview.TableContentReadOnly{},
 		page:                 nil,
 		filter:               db.Filter{},
+		count:                newCount,
 	}
 }
 
@@ -42,7 +83,7 @@ func (a Action) String() string {
 }
 
 func (t *TupleView) GetRowCount() int {
-	return db.CountTuples(&t.filter) + 1
+	return t.count.getTotal()
 }
 
 func (t *TupleView) GetColumnCount() int {
@@ -51,10 +92,12 @@ func (t *TupleView) GetColumnCount() int {
 }
 
 func (t *TupleView) load(row int) {
+	t.filterSet = false
 	t.page = db.Load(row, &t.filter)
 }
 
 func (t *TupleView) setFilter(filter db.Filter) {
+	t.filterSet = true
 	t.filter = filter
 }
 
@@ -62,27 +105,27 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 	if row == 0 {
 		switch column {
 		case 0:
-			return tview.NewTableCell("USER TYPE             ")
+			return tview.NewTableCell("USER TYPE             ").SetSelectable(false)
 		case 1:
-			return tview.NewTableCell("USER ID                                ")
+			return tview.NewTableCell("USER ID                                ").SetSelectable(false)
 		case 2:
-			return tview.NewTableCell("RELATION              ")
+			return tview.NewTableCell("RELATION              ").SetSelectable(false)
 		case 3:
-			return tview.NewTableCell("OBJECT TYPE              ")
+			return tview.NewTableCell("OBJECT TYPE              ").SetSelectable(false)
 		case 4:
-			return tview.NewTableCell("OBJECT ID                                ")
+			return tview.NewTableCell("OBJECT ID                                ").SetSelectable(false)
 		case 5:
-			return tview.NewTableCell("TIMESTAMP \u2191             ")
+			return tview.NewTableCell("TIMESTAMP \u2191             ").SetSelectable(false)
 		case 6:
-			return tview.NewTableCell("ACTION  ")
+			return tview.NewTableCell("ACTION  ").SetSelectable(false)
 		case 7:
-			return tview.NewTableCell("ROW  ")
+			return tview.NewTableCell("ROW  ").SetSelectable(false)
 		default:
-			return tview.NewTableCell("Undefined               ")
+			return tview.NewTableCell("Undefined               ").SetSelectable(false)
 		}
 	}
 
-	if t.page == nil || t.page.LowerBound > row || t.page.UpperBound < row || (t.filter.Search != t.page.Filter.Search) {
+	if t.page == nil || t.page.LowerBound > row || t.page.UpperBound < row || t.filterSet {
 		t.load(row - 1)
 		log.Printf("Current bounds: %v-%v. Requested row: %v", t.page.LowerBound, t.page.UpperBound, row)
 	}
@@ -175,10 +218,15 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	infoTable.SetCell(2, 5, totalCountView)
 	infoTable.SetCell(2, 7, selectedCountView)
 
-	tupleView := NewTupleView()
+	newCount := count{
+		newCountChan: make(chan int, 10),
+	}
+	go newCount.refresh(context, 3*time.Second)
+	tupleView := newTupleView(&newCount)
 
 	tupleTable := tview.NewTable().SetContent(tupleView).SetSelectable(true, false).
 		SetBorders(false).SetFixed(1, 8)
+
 	tupleTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, _ := tupleTable.GetSelection()
 		if event.Key() == tcell.KeyCtrlD && row > 1 {
@@ -250,21 +298,27 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 
 	// Layout for screens narrower than 100 cells (menu and side bar are hidden).
 	grid.AddItem(tupleTable, 3, 0, 10, 1, 0, 0, false)
-	watchUpdatesChan := make(chan WatchUpdate)
+	watchUpdatesChan := make(chan WatchUpdate, 10)
 	go func() {
 		for {
-			t := <-watchUpdatesChan
-			app.QueueUpdateDraw(func() {
-				if t.Token != nil {
-					tokenView.SetText(*t.Token)
-				}
-				writesView.SetText(fmt.Sprintf("%v", t.Writes))
-				deletesView.SetText(fmt.Sprintf("%v", t.Deletes))
-				watchView.SetText(fmt.Sprintf("%v", t.WatchEnabled))
-				totalCountView.SetText(fmt.Sprintf("%v", db.CountTuples(&db.Filter{})))
-				// we decrease one because first line is actually header
-				selectedCountView.SetText(fmt.Sprintf("%v", tupleTable.GetRowCount()-1))
-			})
+			select {
+			case t := <-watchUpdatesChan:
+				app.QueueUpdateDraw(func() {
+					if t.Token != nil {
+						tokenView.SetText(*t.Token)
+					}
+					writesView.SetText(fmt.Sprintf("%v", t.Writes))
+					deletesView.SetText(fmt.Sprintf("%v", t.Deletes))
+					watchView.SetText(fmt.Sprintf("%v", t.WatchEnabled))
+					// we decrease one because first line is actually header
+					selectedCountView.SetText(fmt.Sprintf("%v", tupleTable.GetRowCount()-1))
+				})
+			case i := <-newCount.newCountChan:
+				log.Printf("New count detected %v", i)
+				app.QueueUpdateDraw(func() {
+					totalCountView.SetText(fmt.Sprintf("%v", i))
+				})
+			}
 		}
 	}()
 

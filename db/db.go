@@ -281,8 +281,8 @@ func MarkDeletion(tupleKey string) {
 	}
 }
 
-func GetUserTypes() []string {
-	result, err := db.Query("select distinct user_type from tuples")
+func getTypes(typeToCount string) []string {
+	result, err := db.Query(fmt.Sprintf("select distinct %v from tuples", typeToCount))
 	if err != nil {
 		log.Printf("Failed to get user Types %v", err.Error())
 		return []string{"ERROR"}
@@ -301,4 +301,16 @@ func GetUserTypes() []string {
 		return nil
 	}
 	return userTypes
+}
+
+func GetUserTypes() []string {
+	return getTypes("user_type")
+}
+
+func GetRelations() []string {
+	return getTypes("relation")
+}
+
+func GetObjectTypes() []string {
+	return getTypes("object_type")
 }

@@ -12,7 +12,7 @@ Contributions welcome!
 
 It takes only two env variables at the moment `API_URL` and `STORE_ID`. The database will be stored in the current directory.
 ```shell
-API_URL=https://myopenfga:8080 STORE_ID=03HME1444HSEY9022AENH1YYKFJ go run manager
+API_URL=https://myopenfga:8080 STORE_ID=03HME1444HSEY9022AENH1YYKFJ go run .
 ```
 
 
