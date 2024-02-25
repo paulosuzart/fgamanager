@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var helpBox *tview.TextView
+
 type count struct {
 	totalCount   int
 	lock         sync.RWMutex
@@ -120,7 +122,7 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 		}
 	}
 
-	if t.page == nil || t.page.GetLowerBound() > row || t.page.GetUpperBound() < row || t.filterSet {
+	if (t.page != nil && (t.page.GetLowerBound() > row || t.page.GetUpperBound() < row)) || t.filterSet {
 		t.load(row - 1)
 		if t.page == nil {
 			return nil
@@ -171,6 +173,10 @@ func userTypesDropdown() *tview.DropDown {
 		SetOptions(options, nil).
 		SetCurrentOption(0)
 
+	dropdown.SetFocusFunc(func() {
+		helpBox.SetText("[blue]ENTER:[white] Opens the [orange]userTypes[white] dropdown")
+	})
+
 	return dropdown
 }
 
@@ -182,6 +188,10 @@ func relationsDropdown() *tview.DropDown {
 		SetLabel("Relations").
 		SetOptions(options, nil).
 		SetCurrentOption(0)
+
+	dropdown.SetFocusFunc(func() {
+		helpBox.SetText("[blue]ENTER:[white] Opens the [orange]relations[white] dropdown")
+	})
 
 	return dropdown
 }
@@ -195,10 +205,17 @@ func objectTypesDropdown() *tview.DropDown {
 		SetOptions(options, nil).
 		SetCurrentOption(0)
 
+	dropdown.SetFocusFunc(func() {
+		helpBox.SetText("[blue]ENTER:[white] Opens the [orange]objectTypes[white] dropdown")
+	})
+
 	return dropdown
 }
 
 func AddComponents(context context.Context, app *tview.Application) *tview.Grid {
+	helpBox = tview.NewTextView()
+	helpBox.SetText("Help will appear here").SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
+
 	infoTable := tview.NewTable().SetBorders(false)
 	infoTable.SetCell(0, 0, tview.NewTableCell("Watch Active:").
 		SetTextColor(tcell.ColorDarkOrange))
@@ -251,6 +268,10 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	tupleTable := tview.NewTable().SetContent(tupleView).SetSelectable(true, false).
 		SetBorders(false).SetFixed(1, 8)
 
+	tupleTable.SetFocusFunc(func() {
+		helpBox.SetText("[red]CTRL-D:[white] Mark tuple for [red]deletion[white]\n[blue]Control-Tab:[white] Return to the filter form")
+	})
+
 	tupleTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, _ := tupleTable.GetSelection()
 		if event.Key() == tcell.KeyCtrlD && row > 1 {
@@ -267,30 +288,34 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 		SetPlaceholder("%budget invoice:%").
 		SetFieldWidth(40)
 
+	search.SetFocusFunc(func() {
+		helpBox.SetText("[blue]ENTER:[white] triggers the filter with selected options")
+	})
+
 	userTypes := userTypesDropdown()
 	relations := relationsDropdown()
 	objectTypes := objectTypesDropdown()
 
 	// on enter we set search filter
-	search.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			filter := db.Filter{}
-			searchText := search.GetText()
-			filter.Search = &searchText
-			if i, userType := userTypes.GetCurrentOption(); i > 1 {
-				filter.UserType = &userType
-			}
-			// TODO handle other filters
-			tupleView.setFilter(filter)
-		}
-	})
+	//search.SetDoneFunc(func(key tcell.Key) {
+	//	if key == tcell.KeyEnter {
+	//		filter := db.Filter{}
+	//		searchText := search.GetText()
+	//		filter.Search = &searchText
+	//		if i, userType := userTypes.GetCurrentOption(); i > 1 {
+	//			filter.UserType = &userType
+	//		}
+	//		// TODO handle other filters
+	//		tupleView.setFilter(filter)
+	//	}
+	//})
 
 	filterForm := tview.NewForm().
 		AddFormItem(userTypes).
 		AddFormItem(relations).
 		AddFormItem(objectTypes).
 		AddFormItem(search)
-
+	filterForm.SetBorder(false)
 	filterForm.SetHorizontal(true)
 
 	filterForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -328,14 +353,16 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	tupleTable.SetDoneFunc(func(key tcell.Key) { app.SetFocus(filterForm) })
 
 	grid := tview.NewGrid().
-		SetRows(3, -1).
+		SetRows(3, 3, -5, 3).
 		SetMinSize(3, 20).
 		SetBorders(true).
 		AddItem(infoTable, 0, 0, 1, 1, 0, 0, false).
-		AddItem(filterForm, 1, 0, 2, 1, 0, 0, true)
+		AddItem(filterForm, 1, 0, 1, 1, 0, 0, true)
 
 	// Layout for screens narrower than 100 cells (menu and side bar are hidden).
-	grid.AddItem(tupleTable, 3, 0, 10, 1, 0, 0, false)
+	grid.AddItem(tupleTable, 2, 0, 1, 1, 0, 0, false)
+
+	grid.AddItem(helpBox, 3, 0, 1, 1, 3, 0, false)
 
 	watchUpdatesChan := make(chan WatchUpdate, 10)
 	go func() {
