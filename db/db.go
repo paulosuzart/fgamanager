@@ -119,8 +119,14 @@ type Connection struct {
 }
 
 type Filter struct {
-	Search   *string
-	UserType *string
+	Search     *string
+	UserType   *string
+	Relation   *string
+	ObjectType *string
+}
+
+func (f *Filter) isSet() bool {
+	return f.Search != nil || f.UserType != nil || f.Relation != nil || f.ObjectType != nil
 }
 
 func UpsertConnection(connection Connection) {
@@ -173,35 +179,58 @@ type TuplePendingAction struct {
 // LoadResult represents the last page load
 type LoadResult struct {
 	// the first item loaded row number
-	LowerBound int
+	lowerBound int
 	// the last item loaded row number
-	UpperBound int
+	upperBound int
 	// the tuple content itself
 	Res []TuplePendingAction
 	// whatever was the filter user, it's returned
 	Filter *Filter
+	total  int
+}
+
+func (l *LoadResult) GetTotal() int {
+	return l.total
+}
+
+func (l *LoadResult) GetLowerBound() int {
+	return l.lowerBound
+}
+
+func (l *LoadResult) GetUpperBound() int {
+	return l.upperBound
 }
 
 func Load(offset int, filter *Filter) *LoadResult {
+
 	selectClause := `
 			select tuples.*, p.action from (select *, row_number() over (order by timestamp desc) as row_number from tuples) tuples
 			         left join pending_actions p on tuples.tuple_key = p.tuple_key 
 			where row_number >= :offset and row_number <= :offset + 200
 			`
+
 	var params = map[string]interface{}{
 		"offset": offset,
 	}
 
 	if filter != nil && filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
-		selectClause = fmt.Sprintf("%s and tuples.tuple_key like :query", selectClause)
+		selectClause = fmt.Sprintf("%s and tuples.tuple_key like :query\n", selectClause)
 		params["query"] = filter.Search
 	}
 	if filter != nil && filter.UserType != nil {
-		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType", selectClause)
+		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType\n", selectClause)
 		params["userType"] = filter.UserType
 	}
+	if filter != nil && filter.Relation != nil {
+		selectClause = fmt.Sprintf("%s and tuples.relation = :relation\n", selectClause)
+		params["relation"] = filter.Relation
+	}
+	if filter != nil && filter.ObjectType != nil {
+		selectClause = fmt.Sprintf("%s and tuples.object_type = :objectType\n", selectClause)
+		params["objectType"] = filter.ObjectType
+	}
 
-	log.Printf("Load Query: %v", selectClause)
+	log.Printf("Load Query: %v\noffset: %v", selectClause, offset)
 	rows, err := db.NamedQuery(selectClause, params)
 	if err != nil {
 		log.Fatal(err)
@@ -215,17 +244,18 @@ func Load(offset int, filter *Filter) *LoadResult {
 	}
 	err = rows.Close()
 	if err != nil {
-		return nil
+		log.Panic(err)
 	}
 	if len(res) == 0 {
 		return nil
 	}
 
 	return &LoadResult{
-		LowerBound: res[0].Row,
-		UpperBound: res[len(res)-1].Row,
+		lowerBound: res[0].Row,
+		upperBound: res[len(res)-1].Row,
 		Res:        res,
 		Filter:     filter,
+		total:      CountTuples(filter),
 	}
 }
 
@@ -243,14 +273,35 @@ func GetContinuationToken(apiUrl, storeId string) *string {
 func CountTuples(filter *Filter) int {
 	selectClause := "select count(*) as count from tuples"
 	var params = make(map[string]interface{})
+	if filter != nil && filter.isSet() {
+		selectClause = fmt.Sprintf("%v where", selectClause)
+	}
 	if filter != nil && filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
-		selectClause = fmt.Sprintf("%s where tuples.tuple_key like :query\n", selectClause)
+		selectClause = fmt.Sprintf("%s tuples.tuple_key like :query\n", selectClause)
 		params["query"] = filter.Search
 	}
 	if filter != nil && filter.UserType != nil {
-		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType\n", selectClause)
+		if len(params) > 0 {
+			selectClause = fmt.Sprintf("%s and ", selectClause)
+		}
+		selectClause = fmt.Sprintf("%s tuples.user_type = :userType\n", selectClause)
 		params["userType"] = filter.UserType
 	}
+	if filter != nil && filter.Relation != nil {
+		if len(params) > 0 {
+			selectClause = fmt.Sprintf("%s and ", selectClause)
+		}
+		selectClause = fmt.Sprintf("%s tuples.relation = :relation\n", selectClause)
+		params["relation"] = filter.Relation
+	}
+	if filter != nil && filter.ObjectType != nil {
+		if len(params) > 0 {
+			selectClause = fmt.Sprintf("%s and ", selectClause)
+		}
+		selectClause = fmt.Sprintf("%s tuples.object_type = :objectType", selectClause)
+		params["objectType"] = filter.ObjectType
+	}
+
 	log.Printf("Count query '%v'", selectClause)
 
 	res, err := db.NamedQuery(selectClause, params)

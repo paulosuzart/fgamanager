@@ -30,19 +30,12 @@ func (c *count) setTotal(newTotal int) {
 	log.Printf("New count is %v", newTotal)
 }
 
-func (c *count) refresh(ctx context.Context, d time.Duration) {
+func (c *count) refresh(d time.Duration) {
 	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("Refresh routint is done")
-			return
-		default:
-			log.Printf("Refresh")
-			dbCount := db.CountTuples(nil)
-			c.setTotal(dbCount)
-			c.newCountChan <- dbCount
-			time.Sleep(d)
-		}
+		dbCount := db.CountTuples(nil)
+		c.setTotal(dbCount)
+		c.newCountChan <- dbCount
+		time.Sleep(d)
 	}
 }
 
@@ -52,16 +45,14 @@ type TupleView struct {
 	page      *db.LoadResult
 	filter    db.Filter
 	filterSet bool
-	count     *count
 }
 
-func newTupleView(newCount *count) *TupleView {
-
+func newTupleView() *TupleView {
+	firstPage := db.Load(0, nil)
 	return &TupleView{
 		TableContentReadOnly: tview.TableContentReadOnly{},
-		page:                 nil,
+		page:                 firstPage,
 		filter:               db.Filter{},
-		count:                newCount,
 	}
 }
 
@@ -83,7 +74,10 @@ func (a Action) String() string {
 }
 
 func (t *TupleView) GetRowCount() int {
-	return t.count.getTotal()
+	if t.page == nil || t.page.GetTotal() == 0 {
+		return 0
+	}
+	return t.page.GetTotal()
 }
 
 func (t *TupleView) GetColumnCount() int {
@@ -94,6 +88,7 @@ func (t *TupleView) GetColumnCount() int {
 func (t *TupleView) load(row int) {
 	t.filterSet = false
 	t.page = db.Load(row, &t.filter)
+	log.Printf("Loaded value: %v", t.page)
 }
 
 func (t *TupleView) setFilter(filter db.Filter) {
@@ -125,17 +120,20 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 		}
 	}
 
-	if t.page == nil || t.page.LowerBound > row || t.page.UpperBound < row || t.filterSet {
+	if t.page == nil || t.page.GetLowerBound() > row || t.page.GetUpperBound() < row || t.filterSet {
 		t.load(row - 1)
-		log.Printf("Current bounds: %v-%v. Requested row: %v", t.page.LowerBound, t.page.UpperBound, row)
+		if t.page == nil {
+			return nil
+		}
+		log.Printf("Current bounds: %v-%v. Requested row: %v", t.page.GetLowerBound(), t.page.GetUpperBound(), row)
 	}
 
-	if len(t.page.Res) == 0 {
+	if t.page == nil || t.page.GetTotal() == 0 || len(t.page.Res) == 0 {
 		return nil
 	}
 
-	tuple := t.page.Res[row-t.page.LowerBound].Tuple
-	action := t.page.Res[row-t.page.LowerBound].Action
+	tuple := t.page.Res[row-t.page.GetLowerBound()].Tuple
+	action := t.page.Res[row-t.page.GetLowerBound()].Action
 	switch column {
 	case 0:
 		return tview.NewTableCell(tuple.UserType).SetTextColor(tcell.ColorLightCyan)
@@ -181,7 +179,7 @@ func relationsDropdown() *tview.DropDown {
 	options := []string{"Select a Relation"}
 	options = append(options, availableTypes...)
 	dropdown := tview.NewDropDown().
-		SetLabel("User Types").
+		SetLabel("Relations").
 		SetOptions(options, nil).
 		SetCurrentOption(0)
 
@@ -193,7 +191,7 @@ func objectTypesDropdown() *tview.DropDown {
 	options := []string{"Select a Object Type"}
 	options = append(options, availableTypes...)
 	dropdown := tview.NewDropDown().
-		SetLabel("User Types").
+		SetLabel("Object Types").
 		SetOptions(options, nil).
 		SetCurrentOption(0)
 
@@ -246,8 +244,9 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	newCount := count{
 		newCountChan: make(chan int, 10),
 	}
-	go newCount.refresh(context, 3*time.Second)
-	tupleView := newTupleView(&newCount)
+	go newCount.refresh(3 * time.Second)
+	tupleView := newTupleView()
+	log.Printf("Created table view")
 
 	tupleTable := tview.NewTable().SetContent(tupleView).SetSelectable(true, false).
 		SetBorders(false).SetFixed(1, 8)
@@ -255,10 +254,10 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	tupleTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, _ := tupleTable.GetSelection()
 		if event.Key() == tcell.KeyCtrlD && row > 1 {
-			tuple := tupleView.page.Res[row-tupleView.page.LowerBound].Tuple
+			tuple := tupleView.page.Res[row-tupleView.page.GetLowerBound()].Tuple
 			log.Printf("Marking row as deleted %v", tuple.TupleKey)
 			db.MarkDeletion(tuple.TupleKey)
-			tupleView.load(tupleView.page.LowerBound)
+			tupleView.load(tupleView.page.GetLowerBound())
 		}
 		return event
 	})
@@ -300,14 +299,23 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 			if event.Key() == tcell.KeyTab {
 				app.SetFocus(tupleTable)
 				return event
+				// but if we hit enter we just prepare search
 			} else if event.Key() == tcell.KeyEnter {
 				filter := db.Filter{}
-				searchText := search.GetText()
-				filter.Search = &searchText
+				if searchText := search.GetText(); searchText != "" {
+					filter.Search = &searchText
+				}
 				if i, userType := userTypes.GetCurrentOption(); i > 1 {
 					filter.UserType = &userType
 				}
+				if i, relation := relations.GetCurrentOption(); i > 1 {
+					filter.Relation = &relation
+				}
+				if i, objectType := objectTypes.GetCurrentOption(); i > 1 {
+					filter.ObjectType = &objectType
+				}
 				tupleView.setFilter(filter)
+				tupleTable.Select(0, 0)
 				app.SetFocus(tupleTable)
 				return nil
 			}
@@ -341,13 +349,14 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 					deletesView.SetText(fmt.Sprintf("%v", t.Deletes))
 					watchView.SetText(fmt.Sprintf("%v", t.WatchEnabled))
 					// we decrease one because first line is actually header
-					selectedCountView.SetText(fmt.Sprintf("%v", tupleTable.GetRowCount()-1))
 				})
 			case i := <-newCount.newCountChan:
 				log.Printf("New count detected %v", i)
 				app.QueueUpdateDraw(func() {
 					totalCountView.SetText(fmt.Sprintf("%v", i))
+					selectedCountView.SetText(fmt.Sprintf("%v", tupleTable.GetRowCount()-1))
 				})
+
 			}
 		}
 	}()
