@@ -341,12 +341,14 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	grid := tview.NewGrid().
 		SetRows(3, 3, -5, 3).
 		SetMinSize(3, 20).
-		SetBorders(true).
+		SetBorders(false).
 		AddItem(infoTable, 0, 0, 1, 1, 0, 0, false).
 		AddItem(filterForm, 1, 0, 1, 1, 0, 0, true)
 
 	// Layout for screens narrower than 100 cells (menu and side bar are hidden).
-	grid.AddItem(tupleTable, 2, 0, 1, 1, 0, 0, false)
+	x := tview.NewFrame(tupleTable)
+	x.SetBorder(true).SetBorderAttributes(tcell.AttrNone)
+	grid.AddItem(x, 2, 0, 1, 1, 0, 0, false)
 
 	grid.AddItem(helpBox, 3, 0, 1, 1, 3, 0, false)
 
