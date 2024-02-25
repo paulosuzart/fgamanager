@@ -4,6 +4,7 @@ go 1.21.6
 
 require (
 	github.com/gdamore/tcell/v2 v2.7.0
+	github.com/ggwhite/go-masker v1.1.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/openfga/go-sdk v0.3.5
