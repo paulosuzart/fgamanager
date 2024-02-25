@@ -216,7 +216,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 
 	infoTable.SetCell(1, 4, tview.NewTableCell("Continuation Token:").
 		SetTextColor(tcell.ColorDarkOrange))
-	tokenView := tview.NewTableCell("??")
+	tokenView := tview.NewTableCell("??").SetMaxWidth(60)
 
 	infoTable.SetCell(2, 0, tview.NewTableCell("W:").
 		SetTextColor(tcell.ColorLightGreen))
@@ -305,13 +305,13 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 				if searchText := search.GetText(); searchText != "" {
 					filter.Search = &searchText
 				}
-				if i, userType := userTypes.GetCurrentOption(); i > 1 {
+				if i, userType := userTypes.GetCurrentOption(); i > 0 {
 					filter.UserType = &userType
 				}
-				if i, relation := relations.GetCurrentOption(); i > 1 {
+				if i, relation := relations.GetCurrentOption(); i > 0 {
 					filter.Relation = &relation
 				}
-				if i, objectType := objectTypes.GetCurrentOption(); i > 1 {
+				if i, objectType := objectTypes.GetCurrentOption(); i > 0 {
 					filter.ObjectType = &objectType
 				}
 				tupleView.setFilter(filter)
@@ -336,6 +336,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 
 	// Layout for screens narrower than 100 cells (menu and side bar are hidden).
 	grid.AddItem(tupleTable, 3, 0, 10, 1, 0, 0, false)
+
 	watchUpdatesChan := make(chan WatchUpdate, 10)
 	go func() {
 		for {

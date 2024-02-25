@@ -203,32 +203,38 @@ func (l *LoadResult) GetUpperBound() int {
 
 func Load(offset int, filter *Filter) *LoadResult {
 
-	selectClause := `
-			select tuples.*, p.action from (select *, row_number() over (order by timestamp desc) as row_number from tuples) tuples
-			         left join pending_actions p on tuples.tuple_key = p.tuple_key 
-			where row_number >= :offset and row_number <= :offset + 200
-			`
-
 	var params = map[string]interface{}{
 		"offset": offset,
 	}
 
+	var whereClauses []string
 	if filter != nil && filter.Search != nil && len(strings.TrimSpace(*filter.Search)) > 3 {
-		selectClause = fmt.Sprintf("%s and tuples.tuple_key like :query\n", selectClause)
+		whereClauses = append(whereClauses, "tuples.tuple_key like :query\n")
 		params["query"] = filter.Search
 	}
 	if filter != nil && filter.UserType != nil {
-		selectClause = fmt.Sprintf("%s and tuples.user_type = :userType\n", selectClause)
+		whereClauses = append(whereClauses, "tuples.user_type = :userType\n")
 		params["userType"] = filter.UserType
 	}
 	if filter != nil && filter.Relation != nil {
-		selectClause = fmt.Sprintf("%s and tuples.relation = :relation\n", selectClause)
+		whereClauses = append(whereClauses, "tuples.relation = :relation\n")
 		params["relation"] = filter.Relation
 	}
 	if filter != nil && filter.ObjectType != nil {
-		selectClause = fmt.Sprintf("%s and tuples.object_type = :objectType\n", selectClause)
+		whereClauses = append(whereClauses, "tuples.object_type = :objectType\n")
 		params["objectType"] = filter.ObjectType
 	}
+
+	finalWhere := strings.Join(whereClauses[:], " and ")
+	if finalWhere != "" {
+		finalWhere = " where " + finalWhere
+	}
+
+	selectClause := fmt.Sprintf(`
+			select tuples.*, p.action from (select *, row_number() over (order by timestamp desc) as row_number from tuples %v) tuples
+			         left join pending_actions p on tuples.tuple_key = p.tuple_key 
+			where row_number >= :offset and row_number <= :offset + 200
+			`, finalWhere)
 
 	log.Printf("Load Query: %v\noffset: %v", selectClause, offset)
 	rows, err := db.NamedQuery(selectClause, params)
