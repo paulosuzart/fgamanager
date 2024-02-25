@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gdamore/tcell/v2"
-	masker "github.com/ggwhite/go-masker"
+	"github.com/ggwhite/go-masker"
 	"github.com/paulosuzart/fgamanager/db"
 	"github.com/rivo/tview"
 	"log"
@@ -141,13 +141,13 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 	case 0:
 		return tview.NewTableCell(tuple.UserType).SetTextColor(tcell.ColorLightCyan)
 	case 1:
-		return tview.NewTableCell(tuple.UserId).SetTextColor(tcell.ColorLightCyan)
+		return tview.NewTableCell(masker.ID(tuple.UserId)).SetTextColor(tcell.ColorLightCyan)
 	case 2:
 		return tview.NewTableCell(tuple.Relation).SetTextColor(tcell.ColorLightCyan)
 	case 3:
 		return tview.NewTableCell(tuple.ObjectType).SetTextColor(tcell.ColorLightCyan)
 	case 4:
-		return tview.NewTableCell(tuple.ObjectId).SetTextColor(tcell.ColorLightCyan)
+		return tview.NewTableCell(masker.ID(tuple.ObjectId)).SetTextColor(tcell.ColorLightCyan)
 	case 5:
 		return tview.NewTableCell(tuple.Timestamp.String()).SetTextColor(tcell.ColorLightCyan)
 	case 6:
