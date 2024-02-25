@@ -339,7 +339,7 @@ func MarkDeletion(tupleKey string) {
 }
 
 func getTypes(typeToCount string) []string {
-	result, err := db.Query(fmt.Sprintf("select distinct %v from tuples", typeToCount))
+	result, err := db.Query(fmt.Sprintf("select distinct %v from tuples order by 1", typeToCount))
 	if err != nil {
 		log.Printf("Failed to get user Types %v", err.Error())
 		return []string{"ERROR"}

@@ -20,12 +20,6 @@ type count struct {
 	newCountChan chan int
 }
 
-func (c *count) getTotal() int {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.totalCount
-}
-
 func (c *count) setTotal(newTotal int) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -77,10 +71,13 @@ func (a Action) String() string {
 }
 
 func (t *TupleView) GetRowCount() int {
-	if t.page == nil || t.page.GetTotal() == 0 {
-		return 0
+	if t.filterSet {
+		return db.CountTuples(&t.filter) + 1
 	}
-	return t.page.GetTotal()
+	if t.page == nil || t.page.GetTotal() == 0 {
+		return 1
+	}
+	return t.page.GetTotal() + 1
 }
 
 func (t *TupleView) GetColumnCount() int {
@@ -123,31 +120,32 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 		}
 	}
 
-	if (t.page != nil && (t.page.GetLowerBound() > row || t.page.GetUpperBound() < row)) || t.filterSet {
-		t.load(row - 1)
-		if t.page == nil {
-			return nil
-		}
-		log.Printf("Current bounds: %v-%v. Requested row: %v", t.page.GetLowerBound(), t.page.GetUpperBound(), row)
-	}
-
-	if t.page == nil || t.page.GetTotal() == 0 || len(t.page.Res) == 0 {
+	if t.page.GetTotal() < row-1 {
 		return nil
 	}
 
-	tuple := t.page.Res[row-t.page.GetLowerBound()].Tuple
-	action := t.page.Res[row-t.page.GetLowerBound()].Action
+	if (t.page != nil && (row < t.page.GetLowerBound() || t.page.GetUpperBound() < row)) || t.filterSet {
+		t.load(row - 1)
+		if t.page == nil || t.page.GetTotal() == 0 || len(t.page.Res) == 0 {
+			return nil
+		}
+		log.Printf("Count: %v. Current bounds: %v-%v. Requested row: %v", len(t.page.Res), t.page.GetLowerBound(), t.page.GetUpperBound(), row)
+	}
+
+	index := row - t.page.GetLowerBound()
+	tuple := t.page.Res[index].Tuple
+	action := t.page.Res[index].Action
 	switch column {
 	case 0:
 		return tview.NewTableCell(tuple.UserType).SetTextColor(tcell.ColorLightCyan)
 	case 1:
-		return tview.NewTableCell(masker.ID(tuple.UserId)).SetTextColor(tcell.ColorLightCyan)
+		return tview.NewTableCell(tuple.UserId).SetTextColor(tcell.ColorLightCyan)
 	case 2:
 		return tview.NewTableCell(tuple.Relation).SetTextColor(tcell.ColorLightCyan)
 	case 3:
 		return tview.NewTableCell(tuple.ObjectType).SetTextColor(tcell.ColorLightCyan)
 	case 4:
-		return tview.NewTableCell(masker.ID(tuple.ObjectId)).SetTextColor(tcell.ColorLightCyan)
+		return tview.NewTableCell(tuple.ObjectId).SetTextColor(tcell.ColorLightCyan)
 	case 5:
 		return tview.NewTableCell(tuple.Timestamp.String()).SetTextColor(tcell.ColorLightCyan)
 	case 6:
@@ -276,7 +274,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 
 	tupleTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, _ := tupleTable.GetSelection()
-		if event.Key() == tcell.KeyCtrlD && row > 1 {
+		if event.Key() == tcell.KeyCtrlD && row > 0 {
 			tuple := tupleView.page.Res[row-tupleView.page.GetLowerBound()].Tuple
 			log.Printf("Marking row as deleted %v", tuple.TupleKey)
 			db.MarkDeletion(tuple.TupleKey)
@@ -297,20 +295,6 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	userTypes := userTypesDropdown()
 	relations := relationsDropdown()
 	objectTypes := objectTypesDropdown()
-
-	// on enter we set search filter
-	//search.SetDoneFunc(func(key tcell.Key) {
-	//	if key == tcell.KeyEnter {
-	//		filter := db.Filter{}
-	//		searchText := search.GetText()
-	//		filter.Search = &searchText
-	//		if i, userType := userTypes.GetCurrentOption(); i > 1 {
-	//			filter.UserType = &userType
-	//		}
-	//		// TODO handle other filters
-	//		tupleView.setFilter(filter)
-	//	}
-	//})
 
 	filterForm := tview.NewForm().
 		AddFormItem(userTypes).
