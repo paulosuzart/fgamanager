@@ -1,6 +1,11 @@
 # fgamanager (WIP)
 
-![fgamanager_shot.png](fgamanager_shot.png)
+[![asciicast](https://asciinema.org/a/642929.svg)](https://asciinema.org/a/642929)
+
+> [!IMPORTANT]
+> This is a experimental work in progress. Low test coverage and more playing with the whole setup to test
+> its applicability.
+
 
 Alternative to the official [OpenFGA](https://openfga.dev/) [playground](https://play.fga.dev/) that has some limitations.
 
