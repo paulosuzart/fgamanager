@@ -357,6 +357,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	}()
 
 	go read(context, watchUpdatesChan)
+	go deleteMarked(context)
 
 	return grid
 

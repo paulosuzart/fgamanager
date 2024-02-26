@@ -5,8 +5,39 @@ import (
 	"fmt"
 	openfga "github.com/openfga/go-sdk"
 	"github.com/paulosuzart/fgamanager/db"
+	"log"
 	"time"
 )
+
+func deleteMarked(ctx context.Context) {
+	for {
+		results := db.GetMakedForDeletion()
+		if results != nil {
+			for _, tuple := range results {
+				deleteTuple := openfga.TupleKeyWithoutCondition{
+					User:     tuple.UserType + ":" + tuple.UserId,
+					Relation: tuple.Relation,
+					Object:   tuple.ObjectType + ":" + tuple.ObjectId,
+				}
+				deletes := []openfga.TupleKeyWithoutCondition{deleteTuple}
+				_, resp, err := fgaClient.OpenFgaApi.
+					Write(ctx).
+					Body(openfga.WriteRequest{
+						Deletes: &openfga.WriteRequestDeletes{
+							TupleKeys: deletes}}).Execute()
+				if err != nil && resp.StatusCode != 400 {
+					log.Printf("Error deleting tuples %v: %v", err, resp)
+				}
+
+				if resp.StatusCode == 400 {
+					log.Printf("Mark tuple as stale %v", deleteTuple)
+				}
+			}
+
+		}
+		time.Sleep(10 * time.Second)
+	}
+}
 
 func read(ctx context.Context, watchUpdatesChan chan WatchUpdate) {
 	for {

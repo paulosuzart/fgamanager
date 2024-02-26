@@ -15,7 +15,20 @@ Contributions welcome!
 
 ## Running it
 
-It takes only two env variables at the moment `API_URL` and `STORE_ID`. The database will be stored in the current directory.
+Check the help:
+```shell
+usage: fgamanager [-h|--help] [-a|--apiUrl "<value>"] -s|--storeId "<value>"
+
+                  fgamanager
+
+Arguments:
+
+  -h  --help     Print help information
+  -a  --apiUrl
+  -s  --storeId
+```
+
+Then point to your fga and provide the store id.
 ```shell
 go run . -a https://myopenfga:8080 -s 03HME1444HSEY9022AENH1YYKFJ 
 ```
@@ -29,3 +42,6 @@ It keeps the last state only, meaning all changes are applied locally but not ke
 
 ## High tuple volume
 `fgamanger` was used with more than 1.3Mi tuples with no hiccups. This is possible employing [tview's virtual tables](https://github.com/rivo/tview/wiki/VirtualTable).
+
+## Multiple stores
+At the moment the easiest way to connect to multiple stores is by running `fgamanger` in different folders in order to create a separate sqlite database for each store. In the future it will be possible to specify full database path.

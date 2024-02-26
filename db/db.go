@@ -172,8 +172,8 @@ type PendingAction struct {
 }
 
 type TuplePendingAction struct {
-	*Tuple         "db:tuples"
-	*PendingAction "db:pending_actions"
+	*Tuple
+	*PendingAction
 }
 
 // LoadResult represents the last page load
@@ -370,4 +370,27 @@ func GetRelations() []string {
 
 func GetObjectTypes() []string {
 	return getTypes("object_type")
+}
+
+func GetMakedForDeletion() []Tuple {
+	sql := `select tuples.* from tuples join pending_actions on pending_actions.tuple_key = tuples.tuple_key and
+		pending_actions.action = 'D' limit 10
+	`
+	rows, err := db.Queryx(sql)
+	if err != nil {
+		log.Printf("Failed to fetch marked for deletion")
+		return nil
+	}
+	var results []Tuple
+	for rows.Next() {
+		var tuple Tuple
+		err := rows.StructScan(&tuple)
+		if err != nil {
+			log.Printf("Failed to Scan row %v", err)
+			return nil
+		}
+		results = append(results, tuple)
+	}
+	_ = rows.Close()
+	return results
 }
