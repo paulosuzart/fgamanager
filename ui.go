@@ -203,12 +203,12 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 
 	infoTable.SetCell(1, 0, tview.NewTableCell("Server:").
 		SetTextColor(tcell.ColorDarkOrange).SetMaxWidth(60))
-	infoTable.SetCell(1, 1, tview.NewTableCell(apiUrl))
+	infoTable.SetCell(1, 1, tview.NewTableCell(*apiUrl))
 
 	infoTable.SetCell(1, 2, tview.NewTableCell("StoreId:").
 		SetTextColor(tcell.ColorDarkOrange))
 
-	infoTable.SetCell(1, 3, tview.NewTableCell(masker.ID(storeId)))
+	infoTable.SetCell(1, 3, tview.NewTableCell(masker.ID(*storeId)))
 
 	infoTable.SetCell(1, 4, tview.NewTableCell("Continuation Token:").
 		SetTextColor(tcell.ColorDarkOrange))

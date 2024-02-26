@@ -17,7 +17,7 @@ Contributions welcome!
 
 It takes only two env variables at the moment `API_URL` and `STORE_ID`. The database will be stored in the current directory.
 ```shell
-API_URL=https://myopenfga:8080 STORE_ID=03HME1444HSEY9022AENH1YYKFJ go run .
+go run . -a https://myopenfga:8080 -s 03HME1444HSEY9022AENH1YYKFJ 
 ```
 
 
@@ -27,3 +27,5 @@ So far I've made a risk decision to se FGA's [canges endpoint](https://openfga.d
 
 It keeps the last state only, meaning all changes are applied locally but not kept, reducing the data that will be needed in general. This is not tested against billions of rows, which might be challenging, but for ordinary setups with millions of rows, this should be stable enough.
 
+## High tuple volume
+`fgamanger` was used with more than 1.3Mi tuples with no hiccups. This is possible employing [tview's virtual tables](https://github.com/rivo/tview/wiki/VirtualTable).

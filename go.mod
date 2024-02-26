@@ -3,6 +3,7 @@ module github.com/paulosuzart/fgamanager
 go 1.21.6
 
 require (
+	github.com/akamensky/argparse v1.4.0
 	github.com/gdamore/tcell/v2 v2.7.0
 	github.com/ggwhite/go-masker v1.1.0
 	github.com/jmoiron/sqlx v1.3.5

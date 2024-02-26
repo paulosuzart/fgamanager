@@ -2,25 +2,31 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"github.com/akamensky/argparse"
 	openfga "github.com/openfga/go-sdk"
 	"github.com/paulosuzart/fgamanager/db"
 	"github.com/rivo/tview"
 	"log"
+	"net/url"
 	"os"
 )
 
-var apiUrl = "http://localhost:8087"
-var storeId = ""
+var (
+	parser  = argparse.NewParser("fgamanager", "fgamanager")
+	apiUrl  = parser.String("a", "apiUrl", &argparse.Options{Default: "http://localhost:8087"})
+	storeId = parser.String("s", "storeId", &argparse.Options{Required: true})
+)
 
 func init() {
-	if _apiUrl := os.Getenv("API_URL"); _apiUrl != "" {
-		apiUrl = _apiUrl
+	err := parser.Parse(os.Args)
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+		os.Exit(1)
 	}
-
-	if _storeId := os.Getenv("STORE_ID"); _storeId != "" {
-		storeId = _storeId
-	} else {
-		panic("Store id must be provided via STORE_ID env")
+	if _, err := url.Parse(*apiUrl); err != nil {
+		panic("Api URL is malformed")
+		os.Exit(1)
 	}
 }
 
@@ -59,8 +65,8 @@ func main() {
 	defer db.Close()
 
 	configuration, err := openfga.NewConfiguration(openfga.Configuration{
-		ApiUrl:  apiUrl,
-		StoreId: storeId,
+		ApiUrl:  *apiUrl,
+		StoreId: *storeId,
 	})
 	fgaClient = openfga.NewAPIClient(configuration)
 
