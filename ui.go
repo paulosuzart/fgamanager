@@ -163,50 +163,29 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 	}
 }
 
-func userTypesDropdown() *tview.DropDown {
-	availableTypes := db.GetUserTypes()
-	options := []string{"Select a User Type"}
-	options = append(options, availableTypes...)
+func createDropdown(label, dropDownType string, getterFunc func() []string) *tview.DropDown {
+
 	dropdown := tview.NewDropDown().
-		SetLabel("User Types").
-		SetOptions(options, nil).
-		SetCurrentOption(0)
+		SetLabel(label)
 
 	dropdown.SetFocusFunc(func() {
-		helpBox.SetText("[blue]ENTER:[white] Opens the [orange]userTypes[white] dropdown")
+		helpBox.SetText("[blue]ENTER:[white] Opens the [orange]" + dropDownType + "[white] dropdown")
 	})
 
-	return dropdown
-}
+	go func() {
+		for {
+			// we update if nothing is selected and is not open
+			if i, _ := dropdown.GetCurrentOption(); i <= 0 && !dropdown.IsOpen() {
+				availableTypes := getterFunc()
+				options := []string{"Select a " + dropDownType}
+				options = append(options, availableTypes...)
+				dropdown.SetOptions(options, nil).
+					SetCurrentOption(0)
 
-func relationsDropdown() *tview.DropDown {
-	availableTypes := db.GetRelations()
-	options := []string{"Select a Relation"}
-	options = append(options, availableTypes...)
-	dropdown := tview.NewDropDown().
-		SetLabel("Relations").
-		SetOptions(options, nil).
-		SetCurrentOption(0)
-
-	dropdown.SetFocusFunc(func() {
-		helpBox.SetText("[blue]ENTER:[white] Opens the [orange]relations[white] dropdown")
-	})
-
-	return dropdown
-}
-
-func objectTypesDropdown() *tview.DropDown {
-	availableTypes := db.GetObjectTypes()
-	options := []string{"Select a Object Type"}
-	options = append(options, availableTypes...)
-	dropdown := tview.NewDropDown().
-		SetLabel("Object Types").
-		SetOptions(options, nil).
-		SetCurrentOption(0)
-
-	dropdown.SetFocusFunc(func() {
-		helpBox.SetText("[blue]ENTER:[white] Opens the [orange]objectTypes[white] dropdown")
-	})
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
 	return dropdown
 }
@@ -292,9 +271,9 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 		helpBox.SetText("[blue]ENTER:[white] triggers the filter with selected options")
 	})
 
-	userTypes := userTypesDropdown()
-	relations := relationsDropdown()
-	objectTypes := objectTypesDropdown()
+	userTypes := createDropdown("User Type", "userType", db.GetUserTypes)
+	relations := createDropdown("Relation", "relation", db.GetRelations)
+	objectTypes := createDropdown("Object Type", "objectType", db.GetObjectTypes)
 
 	filterForm := tview.NewForm().
 		AddFormItem(userTypes).
@@ -357,7 +336,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 		for {
 			select {
 			case t := <-watchUpdatesChan:
-				app.QueueUpdateDraw(func() {
+				app.QueueUpdate(func() {
 					if t.Token != nil {
 						tokenView.SetText(*t.Token)
 					}
