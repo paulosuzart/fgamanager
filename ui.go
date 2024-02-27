@@ -246,7 +246,20 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 		SetBorders(false).SetFixed(1, 8)
 
 	tupleTable.SetFocusFunc(func() {
-		helpBox.SetText("[red]CTRL-D:[white] Mark tuple for [red]deletion[white]\n[blue]Control-Tab:[white] Return to the filter form")
+		helpBox.SetText("[green]CTRL-N: [white]Submit new Tuple\n[red]CTRL-D:[white] Mark tuple for [red]deletion[white]\n[blue]Control-Tab:[white] Return to the filter form")
+	})
+	pages := tview.NewPages()
+	pages.SetBorder(true)
+	pages.SwitchToPage("help")
+
+	createForm := tview.NewForm().SetHorizontal(true)
+	createForm.AddInputField("Tuple", "tuple for creation", 120, nil, nil)
+	createForm.AddButton("Create", func() {
+		item := createForm.GetFormItem(0).(*tview.InputField)
+		log.Printf("Will crate tuple %v", item.GetText())
+		go create(context, item.GetText())
+		pages.SwitchToPage("help")
+		app.SetFocus(tupleTable)
 	})
 
 	tupleTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -256,6 +269,9 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 			log.Printf("Marking row as deleted %v", tuple.TupleKey)
 			db.MarkDeletion(tuple.TupleKey)
 			tupleView.load(tupleView.page.GetLowerBound())
+		} else if event.Key() == tcell.KeyCtrlN {
+			pages.SwitchToPage("create")
+			app.SetFocus(createForm)
 		}
 		return event
 	})
@@ -316,18 +332,21 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 	tupleTable.SetDoneFunc(func(key tcell.Key) { app.SetFocus(filterForm) })
 
 	grid := tview.NewGrid().
-		SetRows(3, 3, -5, 3).
+		SetRows(3, 3, -5, 5).
 		SetMinSize(3, 20).
 		SetBorders(false).
 		AddItem(infoTable, 0, 0, 1, 1, 0, 0, false).
 		AddItem(filterForm, 1, 0, 1, 1, 0, 0, true)
 
 	// Layout for screens narrower than 100 cells (menu and side bar are hidden).
-	x := tview.NewFrame(tupleTable)
-	x.SetBorder(true).SetBorderAttributes(tcell.AttrNone)
-	grid.AddItem(x, 2, 0, 1, 1, 0, 0, false)
+	tableFrame := tview.NewFrame(tupleTable)
+	tableFrame.SetBorder(true).SetBorderAttributes(tcell.AttrNone)
+	grid.AddItem(tableFrame, 2, 0, 1, 1, 0, 0, false)
 
-	grid.AddItem(helpBox, 3, 0, 1, 1, 3, 0, false)
+	pages.AddPage("help", helpBox, true, true).
+		AddPage("create", createForm, true, false)
+
+	grid.AddItem(pages, 3, 0, 1, 1, 3, 0, false)
 
 	watchUpdatesChan := make(chan WatchUpdate, 10)
 	go func() {

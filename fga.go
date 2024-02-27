@@ -6,8 +6,32 @@ import (
 	openfga "github.com/openfga/go-sdk"
 	"github.com/paulosuzart/fgamanager/db"
 	"log"
+	"strings"
 	"time"
 )
+
+func create(ctx context.Context, tupleKey string) {
+	keyParts := strings.Split(tupleKey, " ")
+	if len(keyParts) != 3 {
+		log.Printf("Unable to create tuple %v", tupleKey)
+	}
+	user := keyParts[0]
+	relation := keyParts[1]
+	object := keyParts[2]
+	key := openfga.NewTupleKey(user, relation, object)
+	tuple := openfga.NewWriteRequestWrites([]openfga.TupleKey{*key})
+
+	_, _, err := fgaClient.OpenFgaApi.Write(ctx).
+		Body(openfga.WriteRequest{
+			Writes: tuple,
+		}).Execute()
+
+	if err != nil {
+		log.Printf("Error writing tuple: %v", err)
+		return
+	}
+
+}
 
 func deleteMarked(ctx context.Context) {
 	for {
