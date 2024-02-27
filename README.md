@@ -33,6 +33,10 @@ Then point to your fga and provide the store id.
 go run . -a https://myopenfga:8080 -s 03HME1444HSEY9022AENH1YYKFJ 
 ```
 
+# Features
+- Delete tuples (CTRL-D)
+- Create a new tuple (CTRL-N)
+- Search
 
 ## How it works
 
