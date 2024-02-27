@@ -59,6 +59,7 @@ const (
 	Delete Action = "D"
 	Write  Action = "W"
 	None   Action = "N"
+	Stale  Action = "S"
 )
 
 func (a Action) String() string {
@@ -66,6 +67,8 @@ func (a Action) String() string {
 		return "D"
 	} else if a == Write {
 		return "W"
+	} else if a == Stale {
+		return "S"
 	}
 	return "N"
 }
@@ -119,11 +122,6 @@ func (t *TupleView) GetCell(row, column int) *tview.TableCell {
 			return tview.NewTableCell("Undefined               ").SetSelectable(false)
 		}
 	}
-
-	if t.page.GetTotal() < row-1 {
-		return nil
-	}
-
 	if (t.page != nil && (row < t.page.GetLowerBound() || t.page.GetUpperBound() < row)) || t.filterSet {
 		t.load(row - 1)
 		if t.page == nil || t.page.GetTotal() == 0 || len(t.page.Res) == 0 {

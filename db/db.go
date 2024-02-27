@@ -41,6 +41,8 @@ func setupDb(dataSource string) {
 			object_id text not null,
 			timestamp timestamp);
 		
+		CREATE INDEX IF NOT EXISTS idx_tuple_content on tuples(user_type, user_id, relation, object_id, object_type);
+		
 		CREATE TABLE IF NOT EXISTS pending_actions (
 		    tuple_key text not null primary key,
 			action text not null);
@@ -64,9 +66,13 @@ func ApplyChange(change openfga.TupleChange) {
 	userType, userId := splitTypePair(change.TupleKey.GetUser())
 	relation := change.TupleKey.GetRelation()
 	objectType, objectId := splitTypePair(change.TupleKey.GetObject())
-	tupleKey := fmt.Sprintf("%s %s %s", change.GetTupleKey().User,
+	tupleKey := fmt.Sprintf("%s %s %s",
+		change.GetTupleKey().User,
 		change.GetTupleKey().Relation,
 		change.GetTupleKey().Object)
+
+	// ensures whatever existing action is cleaned up
+	db.MustExec("delete from pending_actions where tuple_key = ?", tupleKey)
 
 	if change.Operation == openfga.WRITE {
 		sql := `insert into tuples (
@@ -97,6 +103,7 @@ func ApplyChange(change openfga.TupleChange) {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 	} else if change.Operation == openfga.DELETE {
 		sql := `delete from tuples 
 	     		  where 
@@ -338,6 +345,16 @@ func MarkDeletion(tupleKey string) {
 	}
 }
 
+func MarkStale(tupleKey string) {
+	sql := `insert into pending_actions (tuple_key, action) values (?, 'S') 
+            on conflict do update set action = 'S'`
+	_, err := db.Exec(sql, tupleKey)
+
+	if err != nil {
+		log.Printf("Failed making for deletion %v", err.Error())
+	}
+}
+
 func getTypes(typeToCount string) []string {
 	result, err := db.Query(fmt.Sprintf("select distinct %v from tuples order by 1", typeToCount))
 	if err != nil {
@@ -372,7 +389,7 @@ func GetObjectTypes() []string {
 	return getTypes("object_type")
 }
 
-func GetMakedForDeletion() []Tuple {
+func GetMarkedForDeletion() []Tuple {
 	sql := `select tuples.* from tuples join pending_actions on pending_actions.tuple_key = tuples.tuple_key and
 		pending_actions.action = 'D' limit 10
 	`

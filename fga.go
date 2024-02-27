@@ -11,7 +11,7 @@ import (
 
 func deleteMarked(ctx context.Context) {
 	for {
-		results := db.GetMakedForDeletion()
+		results := db.GetMarkedForDeletion()
 		if results != nil {
 			for _, tuple := range results {
 				deleteTuple := openfga.TupleKeyWithoutCondition{
@@ -25,12 +25,13 @@ func deleteMarked(ctx context.Context) {
 					Body(openfga.WriteRequest{
 						Deletes: &openfga.WriteRequestDeletes{
 							TupleKeys: deletes}}).Execute()
-				if err != nil && resp.StatusCode != 400 {
+				if err != nil && resp.StatusCode != 200 {
 					log.Printf("Error deleting tuples %v: %v", err, resp)
 				}
 
 				if resp.StatusCode == 400 {
 					log.Printf("Mark tuple as stale %v", deleteTuple)
+					db.MarkStale(tuple.TupleKey)
 				}
 			}
 
@@ -50,6 +51,7 @@ func read(ctx context.Context, watchUpdatesChan chan WatchUpdate) {
 		resp, _, err := request.Execute()
 
 		if err != nil {
+			log.Printf("Failure on change fetch: %v", err)
 			errStr := fmt.Sprintf("%v", err)
 			if lastWatchUpdate != nil {
 				lastWatchUpdate.WatchEnabled = "Error"
@@ -86,6 +88,7 @@ func read(ctx context.Context, watchUpdatesChan chan WatchUpdate) {
 			}
 		})
 		if err != nil {
+			log.Printf("Failure on change fetch: %v", err)
 			errStr := fmt.Sprintf("%v", err)
 			if lastWatchUpdate != nil {
 				lastWatchUpdate.WatchEnabled = "Error"
