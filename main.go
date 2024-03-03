@@ -8,8 +8,10 @@ import (
 	"github.com/paulosuzart/fgamanager/db"
 	"github.com/rivo/tview"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
+	"testing"
 )
 
 var (
@@ -19,6 +21,11 @@ var (
 )
 
 func init() {
+	if testing.Testing() {
+		testId := "TESTID"
+		storeId = &testId
+		return
+	}
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
@@ -32,12 +39,39 @@ func init() {
 
 var (
 	fgaClient *openfga.APIClient
+	fga       fgaService
 )
 
 type WatchUpdate struct {
 	Writes, Deletes int
 	Token           *string
 	WatchEnabled    string
+}
+
+type fgaService interface {
+	write(ctx context.Context, tuple *openfga.WriteRequestWrites) error
+	delete(ctx context.Context, deletes []openfga.TupleKeyWithoutCondition) (*http.Response, error)
+}
+
+type fgaWrapper struct {
+	fgaService
+}
+
+func (f *fgaWrapper) write(ctx context.Context, tuple *openfga.WriteRequestWrites) error {
+	_, _, err := fgaClient.OpenFgaApi.Write(ctx).
+		Body(openfga.WriteRequest{
+			Writes: tuple,
+		}).Execute()
+	return err
+}
+
+func (f *fgaWrapper) delete(ctx context.Context, deletes []openfga.TupleKeyWithoutCondition) (*http.Response, error) {
+	_, resp, err := fgaClient.OpenFgaApi.
+		Write(ctx).
+		Body(openfga.WriteRequest{
+			Deletes: &openfga.WriteRequestDeletes{
+				TupleKeys: deletes}}).Execute()
+	return resp, err
 }
 
 func main() {
@@ -69,6 +103,7 @@ func main() {
 		StoreId: *storeId,
 	})
 	fgaClient = openfga.NewAPIClient(configuration)
+	fga = &fgaWrapper{}
 
 	if err != nil {
 		log.Panic("Unable to create openfga config")

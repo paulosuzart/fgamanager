@@ -29,7 +29,8 @@ func (c *count) setTotal(newTotal int) {
 
 func (c *count) refresh(d time.Duration) {
 	for {
-		dbCount := db.CountTuples(nil)
+
+		dbCount := db.Repository.CountTuples(nil)
 		c.setTotal(dbCount)
 		c.newCountChan <- dbCount
 		time.Sleep(d)
@@ -75,7 +76,7 @@ func (a Action) String() string {
 
 func (t *TupleView) GetRowCount() int {
 	if t.filterSet {
-		return db.CountTuples(&t.filter) + 1
+		return db.Repository.CountTuples(&t.filter) + 1
 	}
 	if t.page == nil || t.page.GetTotal() == 0 {
 		return 1

@@ -21,10 +21,7 @@ func create(ctx context.Context, tupleKey string) {
 	key := openfga.NewTupleKey(user, relation, object)
 	tuple := openfga.NewWriteRequestWrites([]openfga.TupleKey{*key})
 
-	_, _, err := fgaClient.OpenFgaApi.Write(ctx).
-		Body(openfga.WriteRequest{
-			Writes: tuple,
-		}).Execute()
+	err := fga.write(ctx, tuple)
 
 	if err != nil {
 		log.Printf("Error writing tuple: %v", err)
@@ -35,7 +32,7 @@ func create(ctx context.Context, tupleKey string) {
 
 func deleteMarked(ctx context.Context) {
 	for {
-		results := db.GetMarkedForDeletion()
+		results := db.Repository.GetMarkedForDeletion()
 		if results != nil {
 			for _, tuple := range results {
 				deleteTuple := openfga.TupleKeyWithoutCondition{
@@ -44,11 +41,7 @@ func deleteMarked(ctx context.Context) {
 					Object:   tuple.ObjectType + ":" + tuple.ObjectId,
 				}
 				deletes := []openfga.TupleKeyWithoutCondition{deleteTuple}
-				_, resp, err := fgaClient.OpenFgaApi.
-					Write(ctx).
-					Body(openfga.WriteRequest{
-						Deletes: &openfga.WriteRequestDeletes{
-							TupleKeys: deletes}}).Execute()
+				resp, err := fga.delete(ctx, deletes)
 				if err != nil && resp.StatusCode != 200 {
 					log.Printf("Error deleting tuples %v: %v", err, resp)
 				}

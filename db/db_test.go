@@ -24,7 +24,7 @@ func TestCount(t *testing.T) {
 		ApplyChange(tupleChange)
 
 		// then
-		if c := CountTuples(nil); c != 1 {
+		if c := Repository.CountTuples(nil); c != 1 {
 			t.Error("There must be 1 entry")
 		}
 	})
@@ -43,7 +43,7 @@ func TestCount(t *testing.T) {
 		ApplyChange(tupleChange)
 
 		// then
-		if c := CountTuples(nil); c != 0 {
+		if c := Repository.CountTuples(nil); c != 0 {
 			t.Error("There must be 1 entry")
 		}
 	})

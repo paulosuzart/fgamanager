@@ -11,8 +11,33 @@ import (
 )
 
 var (
-	db *sqlx.DB
+	db         *sqlx.DB
+	Repository TupleRepository
 )
+
+type TupleRepository interface {
+	CountTuples(filter *Filter) int
+	GetMarkedForDeletion() []Tuple
+}
+
+type SqlxRepository struct {
+	TupleRepository
+	_db *sqlx.DB
+}
+
+func (r *SqlxRepository) CountTuples(filter *Filter) int {
+	return countTuples(filter)
+}
+
+func (r *SqlxRepository) GetMarkedForDeletion() []Tuple {
+	return getMarkedForDeletion()
+}
+
+func newRepository() TupleRepository {
+	var repo TupleRepository
+	repo = &SqlxRepository{}
+	return repo
+}
 
 // Transact keeps it simple and executes the passed function
 func Transact(f func()) error {
@@ -55,6 +80,7 @@ func setupDb(dataSource string) {
 		)
 	`
 	db.MustExec(sts)
+	Repository = newRepository()
 	log.Printf("Finished db setup")
 }
 func SetupDb() {
@@ -268,7 +294,7 @@ func Load(offset int, filter *Filter) *LoadResult {
 		upperBound: res[len(res)-1].Row,
 		Res:        res,
 		Filter:     filter,
-		total:      CountTuples(filter),
+		total:      Repository.CountTuples(filter),
 	}
 }
 
@@ -283,7 +309,7 @@ func GetContinuationToken(apiUrl, storeId string) *string {
 	return &token
 }
 
-func CountTuples(filter *Filter) int {
+func countTuples(filter *Filter) int {
 	selectClause := "select count(*) as count from tuples"
 	var params = make(map[string]interface{})
 	if filter != nil && filter.isSet() {
@@ -389,7 +415,7 @@ func GetObjectTypes() []string {
 	return getTypes("object_type")
 }
 
-func GetMarkedForDeletion() []Tuple {
+func getMarkedForDeletion() []Tuple {
 	sql := `select tuples.* from tuples join pending_actions on pending_actions.tuple_key = tuples.tuple_key and
 		pending_actions.action = 'D' limit 10
 	`
