@@ -18,6 +18,7 @@ var (
 type TupleRepository interface {
 	CountTuples(filter *Filter) int
 	GetMarkedForDeletion() []Tuple
+	ApplyChange(change openfga.TupleChange)
 }
 
 type SqlxRepository struct {
@@ -31,6 +32,10 @@ func (r *SqlxRepository) CountTuples(filter *Filter) int {
 
 func (r *SqlxRepository) GetMarkedForDeletion() []Tuple {
 	return getMarkedForDeletion()
+}
+
+func (r *SqlxRepository) ApplyChange(change openfga.TupleChange) {
+	applyChange(change)
 }
 
 func newRepository() TupleRepository {
@@ -87,8 +92,8 @@ func SetupDb() {
 	setupDb("fga.db")
 }
 
-// ApplyChange Takes a tuple change straight from the API
-func ApplyChange(change openfga.TupleChange) {
+// applyChange Takes a tuple change straight from the API
+func applyChange(change openfga.TupleChange) {
 	userType, userId := splitTypePair(change.TupleKey.GetUser())
 	relation := change.TupleKey.GetRelation()
 	objectType, objectId := splitTypePair(change.TupleKey.GetObject())

@@ -96,7 +96,7 @@ func read(ctx context.Context, watchUpdatesChan chan WatchUpdate) {
 			})
 
 			for _, c := range resp.GetChanges() {
-				db.ApplyChange(c)
+				db.Repository.ApplyChange(c)
 				if c.GetOperation() == openfga.WRITE {
 					writes++
 				} else if c.GetOperation() == openfga.DELETE {

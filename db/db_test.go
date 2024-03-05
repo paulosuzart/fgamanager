@@ -21,7 +21,7 @@ func TestCount(t *testing.T) {
 			Timestamp: time.Now()}
 
 		// when
-		ApplyChange(tupleChange)
+		Repository.ApplyChange(tupleChange)
 
 		// then
 		if c := Repository.CountTuples(nil); c != 1 {
@@ -40,7 +40,7 @@ func TestCount(t *testing.T) {
 			Timestamp: time.Now()}
 
 		// when
-		ApplyChange(tupleChange)
+		applyChange(tupleChange)
 
 		// then
 		if c := Repository.CountTuples(nil); c != 0 {
