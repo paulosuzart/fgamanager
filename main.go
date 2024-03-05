@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	parser  = argparse.NewParser("fgamanager", "fgamanager")
-	apiUrl  = parser.String("a", "apiUrl", &argparse.Options{Default: "http://localhost:8087"})
-	storeId = parser.String("s", "storeId", &argparse.Options{Required: true})
+	parser     = argparse.NewParser("fgamanager", "fgamanager")
+	apiUrl     = parser.String("a", "apiUrl", &argparse.Options{Default: "http://localhost:8087", Help: "OpenFGA API Url"})
+	storeId    = parser.String("s", "storeId", &argparse.Options{Required: true, Help: "The Store Id to connect to"})
+	pruneStale = parser.Flag("p", "prune", &argparse.Options{Required: false, Default: false, Help: "Causes fgamanager to prune stale entries on startup"})
 )
 
 func init() {
@@ -97,6 +98,12 @@ func main() {
 
 	db.SetupDb()
 	defer db.Close()
+
+	if pruneStale != nil && *pruneStale {
+		log.Printf("Will prune stale entries...")
+		rowsAffected := db.Repository.Prune()
+		log.Printf("%v rows pruned", rowsAffected)
+	}
 
 	configuration, err := openfga.NewConfiguration(openfga.Configuration{
 		ApiUrl:  *apiUrl,

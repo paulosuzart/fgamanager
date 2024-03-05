@@ -19,6 +19,7 @@ type TupleRepository interface {
 	CountTuples(filter *Filter) int
 	GetMarkedForDeletion() []Tuple
 	ApplyChange(change openfga.TupleChange)
+	Prune() int
 }
 
 type SqlxRepository struct {
@@ -36,6 +37,39 @@ func (r *SqlxRepository) GetMarkedForDeletion() []Tuple {
 
 func (r *SqlxRepository) ApplyChange(change openfga.TupleChange) {
 	applyChange(change)
+}
+
+func (r *SqlxRepository) Prune() int {
+	affectedRows := 0
+	err := Transact(func() {
+		rows, err := db.Queryx("select tuple_key from pending_actions where action = 'S'")
+		if err != nil {
+			log.Panic("Failed to query stale data")
+		}
+		var ids []string
+		for rows.Next() {
+			var tupleKey string
+			err = rows.Scan(&tupleKey)
+			if err != nil {
+				log.Printf("Failed to scan row %v", err)
+			}
+			ids = append(ids, tupleKey)
+		}
+		_ = rows.Close()
+
+		query, args, _ := sqlx.In(`delete from tuples where tuple_key in (?)`, ids)
+		query = db.Rebind(query)
+		db.MustExec(query, args...)
+		query, args, _ = sqlx.In(`delete from pending_actions where tuple_key in (?)`, ids)
+		query = db.Rebind(query)
+		db.MustExec(query, args...)
+		affectedRows = len(ids)
+	})
+	if err != nil {
+		log.Printf("Failed to transact prune")
+		return 0
+	}
+	return affectedRows
 }
 
 func newRepository() TupleRepository {

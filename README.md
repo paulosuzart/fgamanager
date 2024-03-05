@@ -18,6 +18,7 @@ Contributions welcome!
 Check the help:
 ```shell
 usage: fgamanager [-h|--help] [-a|--apiUrl "<value>"] -s|--storeId "<value>"
+                  [-p|--prune]
 
                   fgamanager
 
@@ -25,7 +26,9 @@ Arguments:
 
   -h  --help     Print help information
   -a  --apiUrl
-  -s  --storeId
+  -s  --storeId  The Store Id to connect to
+  -p  --prune    Causes fgamanager to prune stale entries on startup. Default:
+                 false
 ```
 
 Then point to your fga and provide the store id.
