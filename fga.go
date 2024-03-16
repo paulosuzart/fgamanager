@@ -14,6 +14,7 @@ func create(ctx context.Context, tupleKey string) {
 	keyParts := strings.Split(tupleKey, " ")
 	if len(keyParts) != 3 {
 		log.Printf("Unable to create tuple %v", tupleKey)
+		return
 	}
 	user := keyParts[0]
 	relation := keyParts[1]
@@ -25,9 +26,7 @@ func create(ctx context.Context, tupleKey string) {
 
 	if err != nil {
 		log.Printf("Error writing tuple: %v", err)
-		return
 	}
-
 }
 
 func deleteMarked(ctx context.Context) {

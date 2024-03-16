@@ -247,7 +247,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 		SetBorders(false).SetFixed(1, 8)
 
 	tupleTable.SetFocusFunc(func() {
-		helpBox.SetText("[green]CTRL-N: [white]Submit new Tuple\n[red]CTRL-D:[white] Mark tuple for [red]deletion[white]\n[blue]Control-Tab:[white] Return to the filter form")
+		helpBox.SetText("[green]<ctrl-n>: [white]Submit new Tuple\n[red]<ctrl-d>:[white] Mark tuple for [red]deletion[white]\n[blue]<ctrl-tab>:[white] Return to the filter form")
 	})
 	pages := tview.NewPages()
 	pages.SetBorder(true)
@@ -283,7 +283,7 @@ func AddComponents(context context.Context, app *tview.Application) *tview.Grid 
 		SetFieldWidth(40)
 
 	search.SetFocusFunc(func() {
-		helpBox.SetText("[blue]ENTER:[white] triggers the filter with selected options")
+		helpBox.SetText("[blue]<enter>:[white] triggers the filter with selected options")
 	})
 
 	userTypes := createDropdown("User Type", "userType", db.GetUserTypes)
